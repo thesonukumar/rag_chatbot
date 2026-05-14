@@ -4,16 +4,29 @@ from src.document_loader import load_pdf
 from src.chunker import split_documents
 from src.embedder import get_embedding_model
 
-def create_vector_store(file_path):
+def create_vector_store(file_paths):
     """
-    Loads, chunks, embeds, and stores a PDF in ChromaDB.
+    Loads, chunks, embeds, and stores multiple PDFs in ChromaDB.
+    file_paths: Can be a single string path or a list of string paths.
     """
-    # 1. Load the PDF
-    docs = load_pdf(file_path)
+    # Ensure it's a list
+    if isinstance(file_paths, str):
+        file_paths = [file_paths]
+        
+    all_chunks = []
     
-    # 2. Chunk the text
-    chunks = split_documents(docs)
-    
+    # Process each PDF
+    for file_path in file_paths:
+        # 1. Load the PDF
+        docs = load_pdf(file_path)
+        # 2. Chunk the text
+        chunks = split_documents(docs)
+        all_chunks.extend(chunks)
+        
+    # If no chunks were extracted, exit early
+    if not all_chunks:
+        raise ValueError("No text could be extracted from the provided PDFs.")
+        
     # 3. Get the embedding model
     embedder = get_embedding_model()
     
@@ -24,12 +37,12 @@ def create_vector_store(file_path):
     
     # This creates the database and saves it to disk
     vectorstore = Chroma.from_documents(
-        documents=chunks,
+        documents=all_chunks,
         embedding=embedder,
         persist_directory=persist_dir
     )
     
-    print(f"Successfully saved {len(chunks)} chunks to {persist_dir}!")
+    print(f"Successfully saved {len(all_chunks)} chunks to {persist_dir}!")
     return vectorstore
 
 def get_vector_store():

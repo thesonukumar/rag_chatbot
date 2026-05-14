@@ -28,27 +28,35 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handles PDF uploads and triggers vector store creation"""
+    """Handles multiple PDF uploads and triggers vector store creation"""
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+        return jsonify({'error': 'No files provided'}), 400
         
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    files = request.files.getlist('file')
+    if not files or files[0].filename == '':
+        return jsonify({'error': 'No selected files'}), 400
         
-    if file and file.filename.endswith('.pdf'):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
-        try:
-            # Process the PDF and add to vector store
-            create_vector_store(filepath)
-            return jsonify({'success': True, 'message': f'Successfully ingested {filename}!'})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+    saved_paths = []
+    filenames = []
+    
+    for file in files:
+        if file and file.filename.endswith('.pdf'):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            saved_paths.append(filepath)
+            filenames.append(filename)
             
-    return jsonify({'error': 'Invalid file type. Please upload a PDF.'}), 400
+    if not saved_paths:
+        return jsonify({'error': 'Invalid file types. Please upload PDFs only.'}), 400
+        
+    try:
+        # Process all PDFs and add to vector store
+        create_vector_store(saved_paths)
+        msg = f'Successfully ingested {len(filenames)} file(s)!' if len(filenames) > 1 else f'Successfully ingested {filenames[0]}!'
+        return jsonify({'success': True, 'message': msg})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/ask', methods=['POST'])
 def ask_question():

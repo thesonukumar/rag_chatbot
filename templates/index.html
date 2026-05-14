@@ -21,8 +21,8 @@
                 
                 <form id="uploadForm">
                     <div class="file-input-wrapper">
-                        <input type="file" id="pdfInput" accept=".pdf" required>
-                        <label for="pdfInput" class="file-label">Choose PDF...</label>
+                        <input type="file" id="pdfInput" accept=".pdf" multiple required>
+                        <label for="pdfInput" class="file-label">Choose PDFs...</label>
                     </div>
                     <button type="submit" id="uploadBtn">Upload & Process</button>
                 </form>
@@ -84,11 +84,13 @@
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const file = pdfInput.files[0];
-            if (!file) return;
+            const files = pdfInput.files;
+            if (files.length === 0) return;
 
             const formData = new FormData();
-            formData.append('file', file);
+            for (let i = 0; i < files.length; i++) {
+                formData.append('file', files[i]);
+            }
 
             uploadBtn.disabled = true;
             uploadBtn.textContent = 'Processing...';
@@ -106,7 +108,8 @@
                 if (data.success) {
                     uploadStatus.textContent = data.message;
                     uploadStatus.classList.add('success');
-                    appendMessage('bot', `I've successfully read "${file.name}". What would you like to know?`);
+                    let successMessage = files.length > 1 ? `I've successfully read ${files.length} files.` : `I've successfully read "${files[0].name}".`;
+                    appendMessage('bot', `${successMessage} What would you like to know?`);
                 } else {
                     uploadStatus.textContent = data.error || 'Upload failed.';
                     uploadStatus.classList.add('error');
