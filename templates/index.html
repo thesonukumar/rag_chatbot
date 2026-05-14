@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG PDF Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar for Uploads -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2> RAG Assistant ChatBot</h2>
+            </div>
+            
+            <div class="upload-section">
+                <h3>Knowledge Base</h3>
+                <p>Upload a PDF to chat with it.</p>
+                
+                <form id="uploadForm">
+                    <div class="file-input-wrapper">
+                        <input type="file" id="pdfInput" accept=".pdf" required>
+                        <label for="pdfInput" class="file-label">Choose PDF...</label>
+                    </div>
+                    <button type="submit" id="uploadBtn">Upload & Process</button>
+                </form>
+                
+                <div id="uploadStatus" class="status-message"></div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <div class="chat-header">
+                <h3>Chat Interface</h3>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    <div class="message-content">
+                        Hello! Upload a PDF on the left, then ask me anything about it.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <form id="chatForm">
+                    <input type="text" id="questionInput" placeholder="Ask a question about the PDF..." required>
+                    <button type="submit" id="sendBtn">Send</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // DOM Elements
+        const uploadForm = document.getElementById('uploadForm');
+        const pdfInput = document.getElementById('pdfInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadStatus = document.getElementById('uploadStatus');
+        
+        const chatForm = document.getElementById('chatForm');
+        const questionInput = document.getElementById('questionInput');
+        const chatMessages = document.getElementById('chatMessages');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Helper to add messages to UI
+        function appendMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = text.replace(/\n/g, '<br>');
+            
+            msgDiv.appendChild(contentDiv);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Handle File Upload
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const file = pdfInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Processing...';
+            uploadStatus.textContent = '';
+            uploadStatus.className = 'status-message';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    uploadStatus.textContent = data.message;
+                    uploadStatus.classList.add('success');
+                    appendMessage('bot', `I've successfully read "${file.name}". What would you like to know?`);
+                } else {
+                    uploadStatus.textContent = data.error || 'Upload failed.';
+                    uploadStatus.classList.add('error');
+                }
+            } catch (error) {
+                uploadStatus.textContent = 'Network error during upload.';
+                uploadStatus.classList.add('error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Upload & Process';
+                pdfInput.value = ''; // clear input
+            }
+        });
+
+        // Handle Chat Submission
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            // 1. Add user message to UI
+            appendMessage('user', question);
+            questionInput.value = '';
+            
+            // 2. Add temporary "thinking" message
+            const loadingId = 'loading-' + Date.now();
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot';
+            msgDiv.id = loadingId;
+            msgDiv.innerHTML = '<div class="message-content loading">Thinking...</div>';
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // 3. Send to backend
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                
+                // Remove loading message
+                document.getElementById(loadingId).remove();
+                
+                if (data.success) {
+                    appendMessage('bot', data.answer);
+                } else {
+                    appendMessage('bot', '❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                document.getElementById(loadingId).remove();
+                appendMessage('bot', '❌ Network error communicating with the server.');
+            }
+        });
+    </script>
+</body>
+</html>
