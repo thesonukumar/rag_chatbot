@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────
+# RAG PDF Q&A Chatbot — Dependencies
+# ─────────────────────────────────────────────
+
+# Core RAG framework
+langchain==0.3.25
+langchain-community==0.3.24
+
+# Google Gemini (LLM + Embeddings)
+langchain-google-genai==2.1.4
+
+# PDF parsing
+pypdf==5.4.0
+
+# Vector database (local, no cloud needed)
+chromadb==0.6.3
+
+# Environment variable management (keeps API keys safe)
+python-dotenv==1.1.0
+
+# Web UI
+Flask==3.1.0

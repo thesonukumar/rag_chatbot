@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────
+# RAG Project — Git Ignore
+# ─────────────────────────────────────────────
+
+# NEVER commit these!
+.env
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+.venv/
+
+# Vector database storage
+vectorstore/
+
+# Uploaded PDFs (often large)
+data/
+
+# IDE
+.vscode/
+.idea/
