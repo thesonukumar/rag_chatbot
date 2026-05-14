@@ -1,3 +1,11 @@
+# 1. SQLite Patch (Required for ChromaDB on Vercel)
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 import os
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
@@ -5,8 +13,10 @@ from src.vector_store import create_vector_store
 from src.generator import generate_answer
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'data'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+
+# 2. Use /tmp for uploads (Vercel's only writable directory)
+app.config['UPLOAD_FOLDER'] = '/tmp/data'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

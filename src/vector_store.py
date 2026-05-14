@@ -20,7 +20,7 @@ def create_vector_store(file_path):
     # 4. Store in ChromaDB
     print("\nSaving to ChromaDB... (This may take a minute as it embeds all chunks)")
     
-    persist_dir = os.path.join("vectorstore", "chroma_db")
+    persist_dir = os.path.join("/tmp", "vectorstore", "chroma_db")
     
     # This creates the database and saves it to disk
     vectorstore = Chroma.from_documents(
@@ -36,7 +36,7 @@ def get_vector_store():
     """
     Loads an existing vector store from disk.
     """
-    persist_dir = os.path.join("vectorstore", "chroma_db")
+    persist_dir = os.path.join("/tmp", "vectorstore", "chroma_db")
     if not os.path.exists(persist_dir):
         raise FileNotFoundError("Vector store not found. Create it first!")
         
