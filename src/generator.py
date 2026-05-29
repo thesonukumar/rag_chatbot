@@ -1,67 +1,75 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 from src.retriever import retrieve_relevant_chunks
 
 def get_llm():
     """
-    Initializes the Gemini generation model (Gemini 3.1 Flash Lite)
+    Initializes the Gemini generation model.
     """
-    # Notice we use ChatGoogleGenerativeAI (for chatting) 
-    # instead of GoogleGenerativeAIEmbeddings (for vectors)
     return ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite", # Using exactly the model requested
-        temperature=0.0  # 0.0 means "be factual, no creative guessing"
+        model="gemini-3.1-flash-lite", # Best model based on API quota (15 RPM, 500 RPD)
+        temperature=0.0
     )
 
 def build_prompt():
     """
-    Creates the instructions for the LLM.
+    Creates the instructions for the LLM, including history placeholder.
     """
-    prompt_template = """
-    You are a helpful assistant analyzing a research paper.
-    Answer the question based ONLY on the provided context below.
-    If the context does not contain the answer, say "I cannot find the answer in the provided document."
+    system_prompt = """
+    You are a helpful assistant analyzing a document.
+    Answer the user's question based ONLY on the provided context below.
+    If the exact answer is not in the context, synthesize the most relevant information you can find, and explicitly state what part of the answer is missing from the document.
     Do NOT use your outside knowledge.
 
     Context:
     {context}
-
-    Question: 
-    {question}
-
-    Answer:
     """
     
-    return PromptTemplate(
-        template=prompt_template,
-        input_variables=["context", "question"]
-    )
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{question}")
+    ])
+    
+    return prompt
 
-def generate_answer(question):
+def generate_answer(question, session_id, chat_history=None):
     """
     Retrieves chunks, builds the prompt, and generates an answer.
     """
+    if chat_history is None:
+        chat_history = []
+        
+    # Convert dict history to Langchain message objects
+    formatted_history = []
+    for msg in chat_history:
+        if msg.get('role') == 'user':
+            formatted_history.append(HumanMessage(content=msg.get('content', '')))
+        elif msg.get('role') == 'assistant':
+            formatted_history.append(AIMessage(content=msg.get('content', '')))
+
     # 1. Get relevant chunks
-    chunks = retrieve_relevant_chunks(question)
+    chunks = retrieve_relevant_chunks(question, session_id=session_id)
     
-    # 2. Combine the text from all 3 chunks into one big string
+    if not chunks:
+        return "Please upload a PDF first."
+        
+    # 2. Combine the text
     context_text = "\n\n".join([chunk.page_content for chunk in chunks])
     
     # 3. Build the final prompt
-    prompt = build_prompt().format(context=context_text, question=question)
+    prompt = build_prompt()
+    chain = prompt | get_llm()
     
-    # 4. Send to Gemini to get the answer!
-    llm = get_llm()
     print("\nAsking Gemini to generate an answer...\n")
-    response = llm.invoke(prompt)
+    response = chain.invoke({
+        "context": context_text, 
+        "chat_history": formatted_history,
+        "question": question
+    })
     
     return response.content
 
 if __name__ == "__main__":
-    user_question = "What are the success factors for e-commerce according to the models?"
-    answer = generate_answer(user_question)
-    
-    print("="*50)
-    print("FINAL GENERATED ANSWER:")
-    print("="*50)
-    print(answer)
+    pass
