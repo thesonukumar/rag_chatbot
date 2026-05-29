@@ -12,8 +12,9 @@ langchain-google-genai==2.1.4
 # PDF parsing
 pypdf==5.4.0
 
-# Vector database (local, no cloud needed)
-chromadb==0.6.3
+# Vector database (Cloud)
+pinecone-client>=5.0.1
+langchain-pinecone>=0.2.0
 
 # Environment variable management (keeps API keys safe)
 python-dotenv==1.1.0
@@ -22,6 +23,4 @@ python-dotenv==1.1.0
 Flask==3.1.0
 gunicorn==23.0.0
 
-# Deployment Fixes
-pysqlite3-binary==0.5.4
 

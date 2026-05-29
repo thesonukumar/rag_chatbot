@@ -1,12 +1,5 @@
-# 1. SQLite Patch (Required for ChromaDB on Vercel)
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass
-
 import os
+import uuid
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
 from src.vector_store import create_vector_store
@@ -14,7 +7,7 @@ from src.generator import generate_answer
 
 app = Flask(__name__)
 
-# 2. Use /tmp for uploads (Vercel's only writable directory)
+# Use /tmp for uploads (Vercel's only writable directory)
 app.config['UPLOAD_FOLDER'] = '/tmp/data'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
@@ -32,6 +25,10 @@ def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
         
+    session_id = request.form.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'No session ID provided'}), 400
+
     files = request.files.getlist('file')
     if not files or files[0].filename == '':
         return jsonify({'error': 'No selected files'}), 400
@@ -40,23 +37,32 @@ def upload_file():
     filenames = []
     
     for file in files:
-        if file and file.filename.endswith('.pdf'):
+        if file and file.filename.endswith('.pdf') and file.mimetype == 'application/pdf':
             filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"{session_id}_{filename}")
             file.save(filepath)
             saved_paths.append(filepath)
             filenames.append(filename)
             
     if not saved_paths:
-        return jsonify({'error': 'Invalid file types. Please upload PDFs only.'}), 400
+        return jsonify({'error': 'Invalid file types. Please upload valid PDFs only.'}), 400
         
     try:
-        # Process all PDFs and add to vector store
-        create_vector_store(saved_paths)
+        # Process all PDFs and add to Pinecone vector store with session_id as namespace
+        create_vector_store(saved_paths, session_id)
         msg = f'Successfully ingested {len(filenames)} file(s)!' if len(filenames) > 1 else f'Successfully ingested {filenames[0]}!'
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        # Cleanup: Delete the files from disk since they are now safely in Pinecone
+        # This prevents your Render server from running out of disk space over time
+        for filepath in saved_paths:
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception as cleanup_error:
+                    print(f"Failed to delete {filepath}: {cleanup_error}")
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
@@ -65,11 +71,16 @@ def ask_question():
     if not data or 'question' not in data:
         return jsonify({'error': 'No question provided'}), 400
         
+    session_id = data.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'No session ID provided. Please refresh the page.'}), 400
+
     question = data['question']
+    chat_history = data.get('chat_history', [])
     
     try:
         # Generate answer using our pipeline
-        answer = generate_answer(question)
+        answer = generate_answer(question, session_id, chat_history)
         return jsonify({'success': True, 'answer': answer})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
