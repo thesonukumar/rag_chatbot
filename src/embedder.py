@@ -15,7 +15,7 @@ def get_embedding_model():
         raise ValueError("GOOGLE_API_KEY not found. Please add it to your .env file!")
 
     # Initialize the Google Embedding model
-    # "text-embedding-004" is Google's latest embedding model
+    # "gemini-embedding-2" has the best rate limit (100 RPM) on your account
     embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2")
     return embeddings
 
