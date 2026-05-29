@@ -1,0 +1,56 @@
+================================================================================
+                        PROJECT DOCUMENTATION: RAG CHATBOT
+================================================================================
+
+1. PROJECT OVERVIEW
+--------------------------------------------------
+This project is a Retrieval-Augmented Generation (RAG) chatbot. It allows users to upload PDF documents and have a conversational AI answer questions based strictly on the contents of those documents. 
+
+Instead of passing the entire document to the AI at once (which is slow, expensive, and often exceeds token limits), the application uses a RAG architecture: it splits the document into smaller chunks, mathematically searches for the chunks relevant to the user's question, and only sends those specific chunks to the AI to formulate an answer.
+
+2. ARCHITECTURE & WORKFLOW
+--------------------------------------------------
+The application follows a two-phase workflow: Ingestion (Upload) and Retrieval (Chat).
+
+Phase 1: Ingestion (When a user uploads a PDF)
+1. The user uploads a PDF via the frontend UI.
+2. `app.py` receives the PDF and saves it temporarily to the server.
+3. `src/document_loader.py` reads the PDF and extracts the raw text.
+4. `src/chunker.py` splits the extracted text into smaller, overlapping paragraphs (chunks) so context isn't lost.
+5. `src/embedder.py` uses the "Gemini Embedding 2" model to convert each chunk into a 3072-dimensional vector (a mathematical representation of the text's meaning).
+6. `src/vector_store.py` uploads these vectors to a cloud Pinecone database. It uploads them in batches and includes a 60-second retry mechanism to strictly respect Google's Free Tier API rate limits (100 RPM). It saves them under a unique "session_id" namespace so different users' files do not mix.
+7. `app.py` automatically deletes the temporary PDF from the local server to prevent disk space exhaustion (crucial for platforms like Render).
+
+Phase 2: Retrieval (When a user asks a question)
+1. The user types a question in the UI.
+2. `app.py` receives the question along with the user's `session_id` and chat history.
+3. `src/retriever.py` takes the question, converts it into a vector using the same Embedding model, and asks Pinecone to find the top 15 most mathematically similar chunks in that user's specific namespace.
+4. `src/generator.py` takes those 15 chunks, the user's question, and their chat history, and builds a strict prompt.
+5. The prompt is sent to the "Gemini 3.1 Flash Lite" generation model, instructing it to synthesize the answer based ONLY on the provided chunks, ensuring it does not hallucinate outside information.
+
+3. DIRECTORY & FILE BREAKDOWN
+--------------------------------------------------
+- `app.py`: The main Flask server. Handles routing (`/`, `/upload`, `/ask`), session management, MIME-type file validation, and file cleanup.
+- `requirements.txt`: Lists all Python dependencies (Flask, LangChain, Pinecone, Google Generative AI).
+- `.env`: Stores secret API keys (Google & Pinecone). Excluded from version control.
+- `vercel.json`: Configuration file for Vercel deployment (though the app is now fully compatible with Render.com and standard VPS hosting as well).
+
+/src Directory (Core Logic):
+- `document_loader.py`: Handles parsing PDF files using `PyPDFLoader`.
+- `chunker.py`: Uses `RecursiveCharacterTextSplitter` to break large text into 1000-character chunks with a 200-character overlap.
+- `embedder.py`: Configures the `GoogleGenerativeAIEmbeddings` model (using `models/gemini-embedding-2`) to handle vector translation.
+- `vector_store.py`: Manages the Pinecone cloud database connection. Contains complex logic to create the index (with dimension 3072) and safely batch-upload vectors while catching `429 Quota Exceeded` errors.
+- `retriever.py`: Executes similarity searches against the Pinecone database.
+- `generator.py`: Configures the Chat model (`gemini-3.1-flash-lite`), handles the conversational memory (`ChatPromptTemplate` with `MessagesPlaceholder`), and orchestrates the final answer generation.
+
+/templates & /static Directories (Frontend):
+- `index.html`: The user interface. Uses Vanilla JavaScript to generate unique session IDs, maintain chat history, handle asynchronous API calls, and control the loading overlay states.
+- `style.css`: A modern, Glassmorphism-themed stylesheet. It contains custom CSS keyframe animations for the scanning laser overlay and progress tracking indicators.
+
+4. KEY FEATURES & SAFEGUARDS
+--------------------------------------------------
+- **Stateless Architecture**: By using Pinecone instead of a local SQLite database, the app is 100% serverless-ready and can scale horizontally without losing data.
+- **User Isolation**: The `session_id` implementation ensures strict privacy; a user can only ever retrieve chunks that were uploaded during their own session.
+- **API Rate-Limit Protection**: Google's strict 100-request-per-minute limit is circumvented using an automatic 60-second pause-and-resume mechanism during large PDF ingestion.
+- **Conversational Memory**: The UI sends the last 6 messages back to the server on every request, allowing the AI to understand pronouns and follow-up questions contextually.
+- **Optimized Model Selection**: The system uses `gemini-embedding-2` and `gemini-3.1-flash-lite` specifically to maximize cost-efficiency and ensure the app operates smoothly under the user's specific Google AI API quota limits.

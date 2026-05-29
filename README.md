@@ -60,15 +60,20 @@ If you want to run this locally, follow these steps:
 
 ### 📝 Key Features
 - **Multi-PDF Support**: Upload several files at once; the bot understands context across all of them.
-- **Smart Retrieval**: Uses vector similarity search to find the exact paragraph you need.
-- **Vercel Ready**: Optimized for serverless deployment with SQLite patches and `/tmp` directory handling.
-- **Responsive UI**: A minimal, sidebar-based layout that works great on all screens.
+### 🛠️ Deployment (Render.com)
 
----
+This project is fully ready to be deployed on **Render.com**. 
 
-### 🛠️ Deployment
-This project is configured to be deployed on **Vercel**. It includes a `vercel.json` and a specific patch in `app.py` to handle ChromaDB's SQLite dependency in serverless environments.
+1. Push your code to a GitHub repository.
+2. Go to [Render.com](https://render.com/) and create a new **Web Service**.
+3. Connect your GitHub repository.
+4. Set the following configurations:
+   - **Environment:** `Python 3`
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app`
+5. Click **Advanced** and add your Environment Variables:
+   - `GOOGLE_API_KEY` = *your_google_api_key*
+   - `PINECONE_API_KEY` = *your_pinecone_api_key*
+6. Click **Create Web Service**. 
 
----
-
-*Built with ❤️ for better document analysis.*
+Render will automatically build and deploy your Chatbot!
