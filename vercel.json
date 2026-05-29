@@ -1,4 +1,10 @@
 {
+  "builds": [
+    {
+      "src": "README.md",
+      "use": "@vercel/static"
+    }
+  ],
   "redirects": [
     {
       "source": "/(.*)",
