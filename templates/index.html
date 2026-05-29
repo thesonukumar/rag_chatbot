@@ -54,7 +54,40 @@
         </main>
     </div>
 
+    <!-- Loading Overlay (Hidden by default) -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-modal">
+            <!-- Scanning Laser Animation -->
+            <div class="scanner-container">
+                <div class="document-icon">📄</div>
+                <div class="laser-line"></div>
+            </div>
+            
+            <!-- Progress Tracker -->
+            <div class="progress-container">
+                <h3 id="progressTitle">Analyzing Document</h3>
+                <ul class="progress-steps">
+                    <li id="step1" class="step"><span class="icon">🔲</span> Uploading file...</li>
+                    <li id="step2" class="step"><span class="icon">🔲</span> Extracting text chunks...</li>
+                    <li id="step3" class="step"><span class="icon">🔲</span> Creating embeddings...</li>
+                    <li id="step4" class="step"><span class="icon">🔲</span> Saving to Knowledge Base...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Generate a random UUID for the session
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+        
+        const sessionId = generateUUID();
+        let chatHistory = []; // Array to store memory
+
         // DOM Elements
         const uploadForm = document.getElementById('uploadForm');
         const pdfInput = document.getElementById('pdfInput');
@@ -65,6 +98,14 @@
         const questionInput = document.getElementById('questionInput');
         const chatMessages = document.getElementById('chatMessages');
         const sendBtn = document.getElementById('sendBtn');
+        
+        // Progress Overlay Elements
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const step3 = document.getElementById('step3');
+        const step4 = document.getElementById('step4');
+        let progressTimers = [];
 
         // Helper to add messages to UI
         function appendMessage(sender, text) {
@@ -91,11 +132,36 @@
             for (let i = 0; i < files.length; i++) {
                 formData.append('file', files[i]);
             }
+            formData.append('session_id', sessionId); // Send session ID
 
             uploadBtn.disabled = true;
             uploadBtn.textContent = 'Processing...';
             uploadStatus.textContent = '';
             uploadStatus.className = 'status-message';
+            
+            // Show overlay and start fake progress
+            loadingOverlay.classList.remove('hidden');
+            
+            // Reset steps
+            step1.className = 'step active'; step1.innerHTML = '<span class="icon">⏳</span> Uploading file...';
+            step2.className = 'step'; step2.innerHTML = '<span class="icon">🔲</span> Extracting text chunks...';
+            step3.className = 'step'; step3.innerHTML = '<span class="icon">🔲</span> Creating embeddings...';
+            step4.className = 'step'; step4.innerHTML = '<span class="icon">🔲</span> Saving to Knowledge Base...';
+            
+            progressTimers.push(setTimeout(() => {
+                step1.className = 'step completed'; step1.innerHTML = '<span class="icon">✅</span> Uploading file...';
+                step2.className = 'step active'; step2.innerHTML = '<span class="icon">⏳</span> Extracting text chunks...';
+            }, 1500));
+            
+            progressTimers.push(setTimeout(() => {
+                step2.className = 'step completed'; step2.innerHTML = '<span class="icon">✅</span> Extracting text chunks...';
+                step3.className = 'step active'; step3.innerHTML = '<span class="icon">⏳</span> Creating AI embeddings...<br><small style="font-size: 0.75rem; font-weight: normal; margin-left: 28px;">(May pause automatically to respect API limits)</small>';
+            }, 4000));
+
+            progressTimers.push(setTimeout(() => {
+                step3.className = 'step completed'; step3.innerHTML = '<span class="icon">✅</span> Creating embeddings...';
+                step4.className = 'step active'; step4.innerHTML = '<span class="icon">⏳</span> Saving to Knowledge Base...';
+            }, 14000));
 
             try {
                 const response = await fetch('/upload', {
@@ -104,6 +170,11 @@
                 });
                 
                 const data = await response.json();
+                
+                // Stop progress timers and hide overlay
+                progressTimers.forEach(clearTimeout);
+                progressTimers = [];
+                loadingOverlay.classList.add('hidden');
                 
                 if (data.success) {
                     uploadStatus.textContent = data.message;
@@ -115,6 +186,9 @@
                     uploadStatus.classList.add('error');
                 }
             } catch (error) {
+                progressTimers.forEach(clearTimeout);
+                loadingOverlay.classList.add('hidden');
+                
                 uploadStatus.textContent = 'Network error during upload.';
                 uploadStatus.classList.add('error');
             } finally {
@@ -131,8 +205,9 @@
             const question = questionInput.value.trim();
             if (!question) return;
 
-            // 1. Add user message to UI
+            // 1. Add user message to UI and history
             appendMessage('user', question);
+            chatHistory.push({ role: 'user', content: question });
             questionInput.value = '';
             
             // 2. Add temporary "thinking" message
@@ -151,7 +226,11 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ question: question })
+                    body: JSON.stringify({ 
+                        question: question,
+                        session_id: sessionId,
+                        chat_history: chatHistory.slice(-6) // Keep last 6 messages
+                    })
                 });
                 
                 const data = await response.json();
@@ -161,12 +240,16 @@
                 
                 if (data.success) {
                     appendMessage('bot', data.answer);
+                    chatHistory.push({ role: 'assistant', content: data.answer });
                 } else {
                     appendMessage('bot', '❌ Error: ' + data.error);
+                    // Remove the user question from history if it failed
+                    chatHistory.pop();
                 }
             } catch (error) {
                 document.getElementById(loadingId).remove();
                 appendMessage('bot', '❌ Network error communicating with the server.');
+                chatHistory.pop();
             }
         });
     </script>
